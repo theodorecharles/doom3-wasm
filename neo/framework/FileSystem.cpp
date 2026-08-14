@@ -3555,6 +3555,10 @@ idFileSystemLocal::StartBackgroundReadThread
 =================
 */
 void idFileSystemLocal::StartBackgroundDownloadThread() {
+#ifdef __EMSCRIPTEN__
+	common->Printf( "browser filesystem: background reads run cooperatively\n" );
+	return;
+#endif
 	if ( !backgroundThread.threadHandle ) {
 		Sys_CreateThread( BackgroundDownloadThread, &backgroundThread_exit, backgroundThread, "backgroundDownload" );
 	} else {
@@ -3568,6 +3572,20 @@ idFileSystemLocal::BackgroundDownload
 =================
 */
 void idFileSystemLocal::BackgroundDownload( backgroundDownload_t *bgl ) {
+#ifdef __EMSCRIPTEN__
+	// The first browser milestone is single-threaded. File reads complete on
+	// the calling frame; URL downloads stay disabled until a bounded browser
+	// transport exists.
+	if ( bgl->opcode == DLTYPE_FILE ) {
+		bgl->f->Seek( bgl->file.position, FS_SEEK_SET );
+		bgl->f->Read( bgl->file.buffer, bgl->file.length );
+		bgl->completed = true;
+	} else {
+		bgl->url.status = DL_FAILED;
+		bgl->completed = true;
+	}
+	return;
+#endif
 	if ( bgl->opcode == DLTYPE_FILE ) {
 		if ( dynamic_cast<idFile_Permanent *>(bgl->f) ) {
 			// add the bgl to the background download list

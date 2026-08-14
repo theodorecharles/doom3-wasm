@@ -34,6 +34,7 @@
     const status = document.querySelector('#status');
     const log = document.querySelector('#log');
     const canvas = document.querySelector('#canvas');
+    const buildRevision = '20260814-3';
     let started = false;
 
     function append(message, kind = 'stdout') {
@@ -51,6 +52,7 @@
 
       window.Module = {
         canvas,
+        locateFile: (path) => `${path}?v=${buildRevision}`,
         arguments: ['+set', 'fs_basepath', '/owner-data', '+set', 'fs_savepath', '/save'],
         print: (message) => append(message),
         printErr: (message) => append(message, 'stderr'),
@@ -61,11 +63,15 @@
         onAbort: (reason) => {
           status.textContent = 'Engine stopped at the expected asset/platform gate';
           append(`Engine abort: ${reason}`, 'abort');
+        },
+        onExit: (code) => {
+          status.textContent = 'Engine reached the expected missing-data gate';
+          append(`Engine exited with status ${code}`, 'exit');
         }
       };
 
       const script = document.createElement('script');
-      script.src = './dhewm3.js';
+      script.src = `./dhewm3.js?v=${buildRevision}`;
       script.async = true;
       script.onerror = () => {
         status.textContent = 'Engine JavaScript failed to load';

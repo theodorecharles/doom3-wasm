@@ -19,13 +19,13 @@ Ship Doom 3 Single Player, Resurrection of Evil Single Player, and Doom 3 Multip
 - The web build hardlinks the Doom 3 base game (`BASE=ON`, `D3XP=OFF`). C++ exception catching is enabled, memory grows from 128 MiB up to 2 GiB, and the context target is WebGL 2.
 - The infinite native loop now uses `emscripten_set_main_loop`. The native async thread is disabled for this single-thread checkpoint and `Async()` runs before each browser frame. Native frame throttling no longer sleeps the browser main thread.
 - The launcher starts the real engine bundle on an explicit click and captures stdout/stderr/abort messages in the page. It does not request, upload, or serve retail data.
-- JavaScript syntax, WASM magic, staged-launcher equality, and HTTP delivery were checked locally. Chrome runtime execution was not performed: Chrome was offline after the preceding serialized Quake 4 test. See the exact handoff below.
+- JavaScript syntax, WASM magic, staged-launcher equality, and HTTP delivery were checked locally. Chrome initialized the real engine runtime, reached filesystem startup, and stopped cleanly at the expected missing-owner-data error (`Couldn't load default.cfg`). Native interface discovery and the background-download thread were replaced with a browser loopback interface and cooperative single-thread reads to reach that boundary.
 
 ### Current status by product
 
 | Product | Compiles for web | Browser initialized | Retail data loaded | Playable |
 | --- | --- | --- | --- | --- |
-| Doom 3 base/SP | Yes, hardlinked | Not tested in Chrome | No | No |
+| Doom 3 base/SP | Yes, hardlinked | Yes; filesystem initialization reached | No | No |
 | Doom 3 multiplayer client | Same base executable, unproven | No | No | No |
 | Resurrection of Evil/SP | No; `D3XP=OFF` in this target | No | No | No |
 | Native dedicated server | Older baseline artifacts exist; not rebuilt after the workspace move | N/A | Not tested | No claim |
@@ -207,15 +207,16 @@ cmake -E remove_directory build/web
 
 ## Serialized Chrome handoff
 
-Chrome was unavailable for this checkpoint, so this remains an exact test request rather than a claimed result:
+The assetless Chrome checkpoint passed through real engine and filesystem
+initialization. Repeat it after platform changes with this procedure:
 
 1. Ensure no other id Tech browser smoke is running.
 2. Start the local server using the command above.
 3. In Chrome, open `http://127.0.0.1:8094/?smoke=20260814`.
 4. Confirm the page initially says `Not started` and no `dhewm3.js`/`.wasm` request occurs before the click.
 5. Click **Start assetless engine smoke** once.
-6. Confirm both artifacts return HTTP 200, the page reports `WASM runtime initialized`, and capture the final engine log/abort text.
-7. A clean missing-retail-data stop is the expected assetless outcome. A freeze, tab crash, JavaScript syntax error, missing `Module.canvas`, pthread creation, or a blocking-loop warning is a regression.
+6. Confirm both artifacts return HTTP 200, the page reports `WASM runtime initialized`, logs the loopback-only network and cooperative filesystem paths, and ends at `Couldn't load default.cfg`.
+7. That clean missing-retail-data stop is the expected assetless outcome. A freeze, tab crash, JavaScript syntax error, missing `Module.canvas`, pthread creation, or a blocking-loop warning is a regression.
 
 If the engine gets beyond the data check, stop after recording the first renderer/platform error. Do not start a renderer-polish loop in this test.
 
@@ -229,14 +230,15 @@ If the engine gets beyond the data check, stop after recording the first rendere
 - Search for tracked/worktree PK4/WAD retail files — zero.
 - Search for `dav_methods`, `/data` alias, `PUT`, and the Luna data-ingest module — zero.
 - `git diff --check` — pass.
-- Chrome runtime smoke — not run; browser unavailable after the prior Quake 4 crash.
+- Chrome runtime smoke — pass through Emscripten runtime, native engine startup,
+  loopback networking, and filesystem initialization; expected stop at missing
+  owner `default.cfg`.
 
 ## Next blockers
 
-1. Run the serialized assetless Chrome handoff and record the first real engine-init gate.
-2. Build a local-picker-backed lazy PK4 filesystem using file handles/OPFS, never HTTP or bulk MEMFS preload.
-3. Translate the desktop ARB program renderer to WebGL 2/GLSL ES. Compilation does not prove this renderer path.
-4. Give RoE its own `BASE=OFF`, `D3XP=ON`, `HARDLINK_GAME=ON` web artifact and test it separately.
-5. Rebuild/audit the native dedicated server and add the WebSocket-to-UDP multiplayer bridge only after the base client initializes.
+1. Build a local-picker-backed lazy PK4 filesystem using file handles/OPFS, never HTTP or bulk MEMFS preload. The first real runtime gate is now missing owner `base/default.cfg`.
+2. Translate the desktop ARB program renderer to WebGL 2/GLSL ES. Compilation does not prove this renderer path.
+3. Give RoE its own `BASE=OFF`, `D3XP=ON`, `HARDLINK_GAME=ON` web artifact and test it separately.
+4. Rebuild/audit the native dedicated server and add the WebSocket-to-UDP multiplayer bridge only after the base client initializes.
 
 Report Doom 3 SP, RoE SP, and MP separately on every handoff. Upstream contacted: no. Upstream submission: forbidden.

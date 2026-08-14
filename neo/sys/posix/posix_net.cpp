@@ -277,6 +277,17 @@ void Sys_InitNetworking(void)
 
 	num_interfaces = 0;
 
+#ifdef __EMSCRIPTEN__
+	// Browsers do not expose host interface enumeration. Keep the engine's
+	// loopback assumptions intact; remote transport will be supplied by the
+	// later WebSocket bridge rather than native BSD interface discovery.
+	netint[0].ip = 0x7f000001u;
+	netint[0].mask = 0xff000000u;
+	num_interfaces = 1;
+	common->Printf( "browser networking: loopback interface only\n" );
+	return;
+#endif
+
 	if( getifaddrs( &ifap ) < 0 ) {
 		common->FatalError( "InitNetworking: SIOCGIFCONF error - %s\n", strerror( errno ) );
 		return;
