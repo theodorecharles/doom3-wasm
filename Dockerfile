@@ -17,9 +17,15 @@ COPY build/native/d3xp.so /opt/doom3/bin/d3xp.so
 COPY build/server/dhewm3ded /opt/doom3/bin/dhewm3ded
 COPY build/server/base.so /opt/doom3/server/base.so
 COPY build/server/d3xp.so /opt/doom3/server/d3xp.so
+COPY COPYING.txt /usr/share/nginx/html/DHEWM3-COPYING.txt
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 
 RUN mkdir -p /data/base /data/d3xp /data/custom_maps /opt/doom3/bin /opt/doom3/server \
+    && printf '%s\n' \
+        'Corresponding source for this image:' \
+        "https://github.com/theodorecharles/doom3-wasm/tree/${VCS_REF}" \
+        'The image contains engine/runtime code only; supply proprietary Doom 3/RoE data through /data.' \
+        > /usr/share/nginx/html/SOURCE-OFFER.txt \
     && chmod 0755 /opt/doom3/bin/dhewm3 /opt/doom3/bin/dhewm3ded
 
 ENV HTTP_PORT=8088 \
