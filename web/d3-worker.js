@@ -6,7 +6,7 @@ self.onmessage = async event => {
     if (persist) persist();
     return;
   }
-  const { canvas, entries, mode } = event.data;
+  const { canvas, entries = [], localEntries = [], mode } = event.data;
   const post = (type, text) => self.postMessage({ type, text: String(text) });
   const variant = mode === 'roe' ? 'roe' : 'base';
   const scriptName = `dhewm3-${variant}.js`;
@@ -29,9 +29,21 @@ self.onmessage = async event => {
       locateFile: path => new URL(path.endsWith('.wasm') ? wasmName : path, self.location.href).href,
       preRun: [() => {
         FS.mkdir('/owner-data');
-        FS.mount(WORKERFS, {
-          blobs: entries.map(entry => ({ name: entry.path, data: entry.file }))
-        }, '/owner-data');
+        if (localEntries.length) {
+          FS.mkdir('/owner-data/base');
+          if (localEntries.some(entry => entry.path.startsWith('d3xp/'))) {
+            FS.mkdir('/owner-data/d3xp');
+          }
+          for (const entry of localEntries) {
+            const slash = entry.path.lastIndexOf('/');
+            FS.createLazyFile(`/owner-data/${entry.path.slice(0, slash)}`,
+              entry.path.slice(slash + 1), entry.url, true, false);
+          }
+        } else {
+          FS.mount(WORKERFS, {
+            blobs: entries.map(entry => ({ name: entry.path, data: entry.file }))
+          }, '/owner-data');
+        }
         FS.mkdir('/save');
         FS.mount(IDBFS, {}, '/save');
         addRunDependency('doom3-save-restore');

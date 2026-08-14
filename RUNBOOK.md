@@ -18,7 +18,7 @@ actual rendered level before marking any one playable.
 
 | Product | Emscripten build | Browser native init | Owner data | Menu/level | Playable |
 | --- | --- | --- | --- | --- | --- |
-| Doom 3 SP | Yes, hardlinked base gamecode | Yes | Picker implemented; automated owner selection blocked | Not reached | No |
+| Doom 3 SP | Yes, hardlinked base gamecode | Yes | Picker plus loopback lazy mount verified | Decl initialization reached | No |
 | Doom 3 MP | Same hardlinked base executable and authentic MP code/menus | Yes | Picker implemented; automated owner selection blocked | Not reached | No |
 | RoE SP | Yes, separate hardlinked d3xp gamecode | Yes | Base+d3xp picker implemented; automated owner selection blocked | Not reached | No |
 | Native dedicated server | Source target retained | Not rebuilt in this checkpoint | Not tested | N/A | No claim |
@@ -49,8 +49,11 @@ The browser launcher and worker are real runtime integration, not a mock game:
 - browser networking is deliberately loopback-only at this checkpoint.
 
 No PK4 is tracked, staged under `build/web`, copied into the image, exposed by
-Nginx, or accepted by an HTTP upload route. Docker `/data` is reserved for a
-future native dedicated-server process and Nginx returns 404 for `/data/`.
+the repository's production Nginx configuration, or accepted by an HTTP upload
+route. Docker `/data` is reserved for a future native dedicated-server process
+and Nginx returns 404 for `/data/`. The separate portfolio lab binds only to
+127.0.0.1 and supplies its explicit `/local-data` range route from a read-only
+owner mount.
 
 ### Serialized Chromium evidence
 
@@ -69,12 +72,13 @@ a time:
   `/owner-data/base`, initialized decls, and stopped at the same missing retail
   material boundary. This proves the separate RoE build/route, not RoE gameplay.
 
-The controlled Chrome extension could open the directory chooser, but its file
-injection API returned `Not allowed` because that installed extension lacks
-Chrome's **Allow access to file URLs** permission. Consequently the staged
-owner PK4s could not be selected automatically and the direct WebGL seam was
-not reached. A human/manual picker run is the next required test. Do not turn
-the external data directory into an HTTP route to bypass this boundary.
+After that picker-limited test, the loopback Docker lab loaded
+`http://127.0.0.1:8086/?localdata=1` in Chrome. Exact size/header validation
+passed, the worker opened every real `base/pak000.pk4` through `pak008.pk4` by
+lazy same-origin ranges, the native filesystem reported their real checksums
+and file counts, and decl initialization began without the former `_default`
+missing-material failure. The status reached `Doom 3 single-player runtime
+initialized`. No menu/frame/input/audio/gameplay claim is made yet.
 
 ## Build
 
@@ -137,6 +141,12 @@ base/pak008.pk4     12243
 The local multi-project staging convention is
 `$PORTS_ROOT/data/doom3/{base,d3xp}`. Never copy it into this worktree or point
 the static HTTP server at `$PORTS_ROOT/data`.
+
+The portfolio's loopback-only Docker lab supports `?localdata=1` with optional
+`mode=mp` or `mode=roe`. It validates exact PK4 sizes and ZIP headers, then the
+engine worker creates lazy, read-only files backed by same-origin range
+requests. This removes the picker for local testing without copying roughly two
+gigabytes into browser memory. It is not enabled by the normal launcher URL.
 
 Manual acceptance for the next run:
 

@@ -61,6 +61,14 @@
     ['pak006.pk4', 218751], ['pak007.pk4', 192031], ['pak008.pk4', 12243]
   ]);
   const ROE = new Map([['pak000.pk4', 538385153], ['pak001.pk4', 99336]]);
+  const BASE_GAME = new Map([
+    ['game00.pk4', 963485], ['game01.pk4', 1471407],
+    ['game02.pk4', 3675045], ['game03.pk4', 966225]
+  ]);
+  const ROE_GAME = new Map([
+    ['game00.pk4', 1033208], ['game01.pk4', 1568828],
+    ['game02.pk4', 3897865], ['game03.pk4', 1035648]
+  ]);
   const DB_NAME = 'doom3-owner-data';
   const STORE = 'handles';
   const gate = document.querySelector('#gate');
@@ -151,7 +159,7 @@
     }
     return entries.filter(entry => entry.file.name.toLowerCase().endsWith('.pk4'));
   }
-  async function launch(entries, mode) {
+  async function launch(entries, mode, localEntries = []) {
     if (started) return;
     started = true;
     choose.disabled = chooseFiles.disabled = resume.disabled = true;
@@ -171,7 +179,7 @@
       }
     };
     worker.onerror = event => { status.textContent = `Worker failed: ${event.message}`; };
-    worker.postMessage({ canvas: offscreen, entries, mode }, [offscreen]);
+    worker.postMessage({ canvas: offscreen, entries, localEntries, mode }, [offscreen]);
   }
   async function accept(entries, handle) {
     try {
@@ -183,6 +191,43 @@
       }
       await launch(validated, mode);
     } catch (reason) { error.textContent = reason instanceof Error ? reason.message : String(reason); }
+  }
+
+  async function acceptLoopbackData() {
+    try {
+      const mode = modeSelect.value;
+      const wanted = [
+        ...Array.from(BASE, ([name, size]) => ({ path: `base/${name}`, size })),
+        ...Array.from(BASE_GAME, ([name, size]) => ({ path: `base/${name}`, size }))
+      ];
+      if (mode === 'roe') {
+        wanted.push(
+          ...Array.from(ROE, ([name, size]) => ({ path: `d3xp/${name}`, size })),
+          ...Array.from(ROE_GAME, ([name, size]) => ({ path: `d3xp/${name}`, size }))
+        );
+      }
+      const localEntries = [];
+      for (const entry of wanted) {
+        status.textContent = `Validating local ${entry.path}…`;
+        const url = new URL(`/local-data/${entry.path.split('/').map(encodeURIComponent).join('/')}`, location.href);
+        const head = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+        const size = Number(head.headers.get('content-length'));
+        if (!head.ok || size !== entry.size) {
+          throw new Error(`${entry.path}: ${head.ok ? size : `HTTP ${head.status}`} bytes, expected ${entry.size}`);
+        }
+        const probe = await fetch(url, { headers: { Range: 'bytes=0-3' }, cache: 'no-store' });
+        const magic = new Uint8Array(await probe.arrayBuffer()).subarray(0, 4);
+        if (magic.length !== 4 || magic[0] !== 0x50 || magic[1] !== 0x4b
+            || magic[2] !== 0x03 || magic[3] !== 0x04) {
+          throw new Error(`${entry.path}: invalid PK4 header`);
+        }
+        localEntries.push({ path: entry.path, url: url.href });
+      }
+      await launch([], mode, localEntries);
+    } catch (reason) {
+      error.textContent = reason instanceof Error ? reason.message : String(reason);
+      status.textContent = 'Local owner-data validation failed.';
+    }
   }
 
   choose.addEventListener('click', async () => {
@@ -219,6 +264,10 @@
     resume.hidden = false;
     if ((await handle.queryPermission({ mode: 'read' })) === 'granted') await accept(await filesFromHandle(handle));
   }).catch(reason => { console.warn('Could not restore Doom 3 folder handle', reason); });
+  const query = new URLSearchParams(location.search);
+  if (query.get('mode') === 'roe') modeSelect.value = 'roe';
+  else if (query.get('mode') === 'mp') modeSelect.value = 'mp';
+  if (query.get('localdata') === '1') acceptLoopbackData();
 })();
 </script>
 </body>
