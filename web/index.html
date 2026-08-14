@@ -1,84 +1,225 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Doom 3 WASM engine checkpoint</title>
-  <style>
-    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
-    body { margin: 0; background: #080808; color: #eee; }
-    main { width: min(64rem, calc(100% - 2rem)); margin: 2rem auto; }
-    .panel { padding: 1rem; border: 1px solid #444; background: #151515; }
-    button { padding: .7rem 1rem; font: inherit; cursor: pointer; }
-    button:disabled { cursor: wait; opacity: .7; }
-    canvas { display: block; width: 100%; aspect-ratio: 16 / 9; margin-top: 1rem; background: #000; }
-    pre { min-height: 12rem; max-height: 24rem; overflow: auto; margin: 1rem 0 0; padding: 1rem; background: #000; color: #d8d8d8; white-space: pre-wrap; }
-    .status { color: #9fd7ff; }
-    code { color: #ddd; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Doom 3 — WebAssembly</title>
+<style>
+  :root { color-scheme: dark; font: 15px/1.45 system-ui,sans-serif; }
+  * { box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; margin: 0; background: #050505; color: #eee; }
+  body { display: grid; place-items: center; overflow: hidden; }
+  main { position: relative; width: min(100vw, calc(100vh * 16 / 9)); aspect-ratio: 16 / 9; background: #000; }
+  canvas { width: 100%; height: 100%; display: block; background: #000; outline: none; }
+  #gate { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; padding: 1rem; background: rgb(5 5 5 / .95); }
+  #gate[hidden] { display: none; }
+  section { width: min(44rem, 100%); border: 1px solid #654d42; background: #17110f; padding: 1.25rem; }
+  h1 { margin: 0 0 .65rem; letter-spacing: .12em; text-transform: uppercase; }
+  p { color: #c9beb8; }
+  .actions { display: flex; flex-wrap: wrap; gap: .6rem; }
+  button, select { padding: .65rem .8rem; border: 1px solid #8a6658; background: #30211c; color: #fff; font: inherit; }
+  button:disabled { opacity: .5; }
+  #error { color: #ff9d8e; white-space: pre-wrap; }
+  #status { position: absolute; inset: auto 0 0; z-index: 3; padding: .45rem .7rem; background: rgb(0 0 0 / .78); }
+  #log { position: absolute; inset: 0; z-index: 1; margin: 0; padding: .75rem; overflow: auto; color: #bbb; background: #050505; white-space: pre-wrap; }
+</style>
 </head>
 <body>
-  <main>
-    <h1>Doom 3 WASM engine checkpoint</h1>
-    <section class="panel">
-      <p>This page starts the real downstream dhewm3 Emscripten client without retail data. It is an engine initialization smoke test, not a playable Doom 3 or Resurrection of Evil build.</p>
-      <p>Owner PK4s are intentionally neither uploaded nor served by this page. Browser asset loading still needs a lazy local filesystem that does not copy multi-gigabyte archives into WASM memory.</p>
-      <button id="start" type="button">Start assetless engine smoke</button>
-      <span id="status" class="status" role="status">Not started</span>
+<main>
+  <canvas id="canvas" width="1280" height="720" tabindex="0" aria-label="Doom 3 game canvas"></canvas>
+  <pre id="log" aria-live="polite"></pre>
+  <div id="gate">
+    <section>
+      <h1>Doom 3</h1>
+      <p>Select the installation folder containing <code>base</code> and, for Resurrection of Evil, <code>d3xp</code>. PK4 files stay on this device: the browser gives a read-only view directly to the game worker and never uploads them.</p>
+      <label>Game
+        <select id="mode">
+          <option value="base">Doom 3 — Single Player</option>
+          <option value="mp">Doom 3 — Multiplayer</option>
+          <option value="roe">Resurrection of Evil — Single Player</option>
+        </select>
+      </label>
+      <p id="error" role="alert"></p>
+      <div class="actions">
+        <button id="choose" type="button">Choose Doom 3 folder</button>
+        <button id="choose-files" type="button">Choose folder (compatibility)</button>
+        <button id="assetless" type="button" hidden>Start assetless diagnostic</button>
+        <button id="resume" type="button" hidden>Resume saved folder</button>
+        <button id="forget" type="button">Forget folder permission</button>
+      </div>
     </section>
-    <canvas id="canvas" width="960" height="540" tabindex="0" aria-label="Doom 3 engine canvas"></canvas>
-    <pre id="log" aria-live="polite">[doom3-wasm] Launcher ready. Retail data has not been requested.</pre>
-  </main>
-  <script>
-    const button = document.querySelector('#start');
-    const status = document.querySelector('#status');
-    const log = document.querySelector('#log');
-    const canvas = document.querySelector('#canvas');
-    const buildRevision = '20260814-3';
-    let started = false;
+  </div>
+  <div id="status">Waiting for owner data…</div>
+  <input id="fallback" type="file" webkitdirectory multiple hidden>
+</main>
+<script>
+(() => {
+  'use strict';
+  const BASE = new Map([
+    ['pak000.pk4', 353159257], ['pak001.pk4', 229649726], ['pak002.pk4', 416937674],
+    ['pak003.pk4', 317590154], ['pak004.pk4', 237752384], ['pak005.pk4', 552334],
+    ['pak006.pk4', 218751], ['pak007.pk4', 192031], ['pak008.pk4', 12243]
+  ]);
+  const ROE = new Map([['pak000.pk4', 538385153], ['pak001.pk4', 99336]]);
+  const DB_NAME = 'doom3-owner-data';
+  const STORE = 'handles';
+  const gate = document.querySelector('#gate');
+  const canvas = document.querySelector('#canvas');
+  const log = document.querySelector('#log');
+  const status = document.querySelector('#status');
+  const error = document.querySelector('#error');
+  const choose = document.querySelector('#choose');
+  const chooseFiles = document.querySelector('#choose-files');
+  const resume = document.querySelector('#resume');
+  const forget = document.querySelector('#forget');
+  const fallback = document.querySelector('#fallback');
+  const assetless = document.querySelector('#assetless');
+  const modeSelect = document.querySelector('#mode');
+  let started = false;
+  let worker = null;
 
-    function append(message, kind = 'stdout') {
-      const line = String(message ?? '');
-      log.textContent += `\n[${kind}] ${line}`;
-      log.scrollTop = log.scrollHeight;
-    }
-
-    button.addEventListener('click', () => {
-      if (started) return;
-      started = true;
-      button.disabled = true;
-      status.textContent = 'Loading real dhewm3 WebAssembly…';
-      append('Starting engine without owner PK4s; a missing-data stop is expected.');
-
-      window.Module = {
-        canvas,
-        locateFile: (path) => `${path}?v=${buildRevision}`,
-        arguments: ['+set', 'fs_basepath', '/owner-data', '+set', 'fs_savepath', '/save'],
-        print: (message) => append(message),
-        printErr: (message) => append(message, 'stderr'),
-        onRuntimeInitialized: () => {
-          status.textContent = 'WASM runtime initialized; engine startup is running';
-          append('Emscripten runtime initialized.');
-        },
-        onAbort: (reason) => {
-          status.textContent = 'Engine stopped at the expected asset/platform gate';
-          append(`Engine abort: ${reason}`, 'abort');
-        },
-        onExit: (code) => {
-          status.textContent = 'Engine reached the expected missing-data gate';
-          append(`Engine exited with status ${code}`, 'exit');
-        }
-      };
-
-      const script = document.createElement('script');
-      script.src = `./dhewm3.js?v=${buildRevision}`;
-      script.async = true;
-      script.onerror = () => {
-        status.textContent = 'Engine JavaScript failed to load';
-        append('Could not load dhewm3.js', 'error');
-      };
-      document.body.append(script);
+  function openDatabase() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, 1);
+      request.onupgradeneeded = () => request.result.createObjectStore(STORE);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
     });
-  </script>
+  }
+  async function storedHandle(nextHandle) {
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction(STORE, nextHandle === undefined ? 'readonly' : 'readwrite');
+      const request = nextHandle === undefined ? tx.objectStore(STORE).get('doom3') : tx.objectStore(STORE).put(nextHandle, 'doom3');
+      return await new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    } finally { db.close(); }
+  }
+  async function clearHandle() {
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).delete('doom3');
+      await new Promise((resolve, reject) => { tx.oncomplete = resolve; tx.onerror = () => reject(tx.error); });
+    } finally { db.close(); }
+  }
+  async function filesFromHandle(handle) {
+    const files = [];
+    async function visit(directory, prefix) {
+      for await (const entry of directory.values()) {
+        const path = prefix ? `${prefix}/${entry.name}` : entry.name;
+        if (entry.kind === 'directory') await visit(entry, path);
+        else if (entry.name.toLowerCase().endsWith('.pk4')) files.push({ path, file: await entry.getFile() });
+      }
+    }
+    const rootPrefix = /^(base|d3xp)$/i.test(handle.name) ? handle.name.toLowerCase() : '';
+    await visit(handle, rootPrefix);
+    return files;
+  }
+  function filesFromFallback(fileList) {
+    return Array.from(fileList, file => {
+      const raw = (file.webkitRelativePath || file.name).replaceAll('\\', '/');
+      const parts = raw.split('/');
+      const index = parts.findIndex(part => /^(base|d3xp)$/i.test(part));
+      const path = index >= 0 ? parts.slice(index).join('/') : raw;
+      return { path, file };
+    });
+  }
+  async function validate(entries, mode) {
+    const byPath = new Map(entries.map(entry => [entry.path.toLowerCase(), entry.file]));
+    const failures = [];
+    const check = (directory, expected) => {
+      for (const [name, size] of expected) {
+        const path = `${directory}/${name}`;
+        const file = byPath.get(path);
+        if (!file) failures.push(`missing ${path}`);
+        else if (file.size !== size) failures.push(`${path}: ${file.size} bytes, expected ${size}`);
+      }
+    };
+    check('base', BASE);
+    if (mode === 'roe') check('d3xp', ROE);
+    if (failures.length) throw new Error(`This is not the expected original Doom 3 Steam data set:\n${failures.join('\n')}`);
+    for (const entry of entries) {
+      if (!entry.file.name.toLowerCase().endsWith('.pk4')) continue;
+      const signature = new Uint8Array(await entry.file.slice(0, 4).arrayBuffer());
+      if (signature.length !== 4 || signature[0] !== 0x50 || signature[1] !== 0x4b ||
+          signature[2] !== 0x03 || signature[3] !== 0x04) {
+        throw new Error(`${entry.path} is not a ZIP/PK4 archive`);
+      }
+    }
+    return entries.filter(entry => entry.file.name.toLowerCase().endsWith('.pk4'));
+  }
+  async function launch(entries, mode) {
+    if (started) return;
+    started = true;
+    choose.disabled = chooseFiles.disabled = resume.disabled = true;
+    status.textContent = 'Starting Doom 3 worker…';
+    error.textContent = '';
+    gate.hidden = true;
+    log.textContent = '';
+    worker = new Worker('d3-worker.js');
+    const offscreen = canvas.transferControlToOffscreen();
+    worker.onmessage = event => {
+      const message = event.data || {};
+      if (message.type === 'log') log.textContent += `${message.text}\n`;
+      if (message.type === 'status') status.textContent = message.text;
+      if (message.type === 'error') {
+        status.textContent = 'Doom 3 stopped';
+        log.textContent += `ERROR: ${message.text}\n`;
+      }
+    };
+    worker.onerror = event => { status.textContent = `Worker failed: ${event.message}`; };
+    worker.postMessage({ canvas: offscreen, entries, mode }, [offscreen]);
+  }
+  async function accept(entries, handle) {
+    try {
+      const mode = modeSelect.value;
+      const validated = await validate(entries, mode);
+      if (handle) {
+        try { await storedHandle(handle); }
+        catch (reason) { console.warn('Could not remember Doom 3 folder permission', reason); }
+      }
+      await launch(validated, mode);
+    } catch (reason) { error.textContent = reason instanceof Error ? reason.message : String(reason); }
+  }
+
+  choose.addEventListener('click', async () => {
+    if (!window.showDirectoryPicker) { fallback.click(); return; }
+    try {
+      const handle = await window.showDirectoryPicker({ mode: 'read' });
+      await accept(await filesFromHandle(handle), handle);
+    } catch (reason) { if (!reason || reason.name !== 'AbortError') error.textContent = String(reason); }
+  });
+  chooseFiles.addEventListener('click', () => fallback.click());
+  if (new URLSearchParams(location.search).get('assetless') === '1') {
+    assetless.hidden = false;
+    assetless.addEventListener('click', () => {
+      const file = new File(['\n'], 'default.cfg', { type: 'text/plain' });
+      launch([{ path: 'base/default.cfg', file }], modeSelect.value);
+    });
+  }
+  fallback.addEventListener('change', () => { if (fallback.files.length) accept(filesFromFallback(fallback.files)); });
+  resume.addEventListener('click', async () => {
+    try {
+      const handle = await storedHandle();
+      if ((await handle.requestPermission({ mode: 'read' })) !== 'granted') return;
+      await accept(await filesFromHandle(handle));
+    } catch (reason) { error.textContent = String(reason); }
+  });
+  forget.addEventListener('click', async () => {
+    await clearHandle();
+    resume.hidden = true;
+    status.textContent = 'Saved folder permission removed.';
+  });
+  addEventListener('pagehide', () => { if (worker) worker.postMessage({ type: 'persist' }); });
+  storedHandle().then(async handle => {
+    if (!handle) return;
+    resume.hidden = false;
+    if ((await handle.queryPermission({ mode: 'read' })) === 'granted') await accept(await filesFromHandle(handle));
+  }).catch(reason => { console.warn('Could not restore Doom 3 folder handle', reason); });
+})();
+</script>
 </body>
 </html>

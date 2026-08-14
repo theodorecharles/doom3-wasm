@@ -12,8 +12,11 @@ references
 build/*
 !build/web/
 !build/web/index.html
-!build/web/dhewm3.js
-!build/web/dhewm3.wasm
+!build/web/d3-worker.js
+!build/web/dhewm3-base.js
+!build/web/dhewm3-base.wasm
+!build/web/dhewm3-roe.js
+!build/web/dhewm3-roe.wasm
 !build/native/
 !build/native/dhewm3
 !build/native/base.so

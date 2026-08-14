@@ -97,6 +97,22 @@ void Sys_InitThreads() {
 	mainThreadID = SDL_GetCurrentThreadID();
 	mainThreadIDset = true;
 
+#ifdef D3WASM_CLIENT
+	// The browser build has no pthread pool. Keep all engine work on the
+	// cooperative browser loop instead of asking SDL for condition variables,
+	// which are unavailable in Emscripten's non-pthread runtime.
+	for (int i = 0; i < MAX_TRIGGER_EVENTS; i++) {
+		signaled[i] = false;
+		waiting[i] = false;
+	}
+	for (int i = 0; i < MAX_THREADS; i++) {
+		thread[i] = NULL;
+	}
+	thread_count = 0;
+	Sys_Printf("browser threading: cooperative single-thread primitives\n");
+	return;
+#endif
+
 	// critical sections
 	for (int i = 0; i < MAX_CRITICAL_SECTIONS; i++) {
 		mutex[i] = SDL_CreateMutex();
@@ -133,6 +149,10 @@ Sys_ShutdownThreads
 ==================
 */
 void Sys_ShutdownThreads() {
+#ifdef D3WASM_CLIENT
+	thread_count = 0;
+	return;
+#endif
 	// threads
 	for (int i = 0; i < MAX_THREADS; i++) {
 		if (!thread[i])
@@ -170,6 +190,10 @@ Sys_EnterCriticalSection
 void Sys_EnterCriticalSection(int index) {
 	assert(index >= 0 && index < MAX_CRITICAL_SECTIONS);
 
+#ifdef D3WASM_CLIENT
+	return;
+#endif
+
 #if SDL_VERSION_ATLEAST(3, 0, 0)
 	SDL_LockMutex(mutex[index]); // in SDL3, this returns void and can't fail
 #else // SDL2 and SDL1.2
@@ -185,6 +209,10 @@ Sys_LeaveCriticalSection
 */
 void Sys_LeaveCriticalSection(int index) {
 	assert(index >= 0 && index < MAX_CRITICAL_SECTIONS);
+
+#ifdef D3WASM_CLIENT
+	return;
+#endif
 
 #if SDL_VERSION_ATLEAST(3, 0, 0)
 	SDL_UnlockMutex(mutex[index]); // in SDL3, this returns void and can't fail
@@ -215,6 +243,13 @@ Sys_WaitForEvent
 void Sys_WaitForEvent(int index) {
 	assert(index >= 0 && index < MAX_TRIGGER_EVENTS);
 
+#ifdef D3WASM_CLIENT
+	// A browser frame must never block. Background I/O is synchronous at the
+	// D3WASM seam, so consume a pending signal and return cooperatively.
+	signaled[index] = false;
+	return;
+#endif
+
 	Sys_EnterCriticalSection(CRITICAL_SECTION_SYS);
 
 	assert(!waiting[index]);	// WaitForEvent from multiple threads? that wouldn't be good
@@ -243,6 +278,11 @@ Sys_TriggerEvent
 void Sys_TriggerEvent(int index) {
 	assert(index >= 0 && index < MAX_TRIGGER_EVENTS);
 
+#ifdef D3WASM_CLIENT
+	signaled[index] = true;
+	return;
+#endif
+
 	Sys_EnterCriticalSection(CRITICAL_SECTION_SYS);
 
 	if (waiting[index]) {
@@ -266,6 +306,13 @@ Sys_CreateThread
 ==================
 */
 void Sys_CreateThread(xthread_t function, void *parms, xthreadInfo& info, const char *name) {
+#ifdef D3WASM_CLIENT
+	(void)function;
+	(void)parms;
+	memset(&info, 0, sizeof(info));
+	Sys_Printf("WARNING: browser build ignored thread request for '%s'\n", name);
+	return;
+#endif
 	Sys_EnterCriticalSection();
 
 #if SDL_VERSION_ATLEAST(2, 0, 0)
@@ -298,6 +345,10 @@ Sys_DestroyThread
 ==================
 */
 void Sys_DestroyThread(xthreadInfo& info) {
+#ifdef D3WASM_CLIENT
+	memset(&info, 0, sizeof(info));
+	return;
+#endif
 	assert(info.threadHandle);
 
 	SDL_WaitThread(info.threadHandle, NULL);
@@ -333,6 +384,12 @@ find the name of the calling thread
 ==================
 */
 const char *Sys_GetThreadName(int *index) {
+#ifdef D3WASM_CLIENT
+	if (index) {
+		*index = -1;
+	}
+	return "main";
+#endif
 	const char *name;
 
 	Sys_EnterCriticalSection();

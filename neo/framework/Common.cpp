@@ -3020,6 +3020,15 @@ void idCommonLocal::Init( int argc, char **argv ) {
 #endif
 #endif
 
+#ifdef D3WASM_CLIENT
+	printf( "[doom3-wasm] initializing SDL timer services\n" );
+	fflush( stdout );
+	if ( SDL_Init( SDL_INIT_TIMER ) != 0 ) {
+		Sys_Error( "Error while initializing SDL: %s", SDL_GetError() );
+	}
+	printf( "[doom3-wasm] SDL initialization complete\n" );
+	fflush( stdout );
+#else
 #if SDL_VERSION_ATLEAST(3, 0, 0)
 	if ( ! SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD) )
 	{
@@ -3040,6 +3049,7 @@ void idCommonLocal::Init( int argc, char **argv ) {
 			Sys_Error("Error while initializing SDL: %s", SDL_GetError());
 		}
 	}
+#endif
 
 	Sys_InitThreads();
 

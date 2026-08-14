@@ -56,6 +56,8 @@ if(MSVC)
 endif()
 option(DEDICATED	"Build the dedicated server" OFF)
 option(D3WASM_CLIENT "Build the initial single-threaded Emscripten client" OFF)
+set(D3WASM_GAME "base" CACHE STRING "Hardlinked browser game: base or roe")
+set_property(CACHE D3WASM_GAME PROPERTY STRINGS base roe)
 option(ONATIVE		"Optimize for the host CPU" OFF)
 option(SDL2			"Use SDL2 instead of SDL1.2" ON)
 option(SDL3			"Use SDL3 instead of SDL2 or SDL1.2" OFF)
@@ -71,12 +73,19 @@ if(D3WASM_CLIENT)
 		message(FATAL_ERROR "D3WASM_CLIENT requires the Emscripten CMake toolchain")
 	endif()
 
-	# The first browser checkpoint is a statically linked Doom 3 client. RoE
-	# will use a separate hardlinked build until browser-side modules exist.
+	# Base and RoE use separate statically linked browser executables. This keeps
+	# dlopen out of the browser path while preserving both native gamecode trees.
 	set(DEDICATED OFF CACHE BOOL "Build the dedicated server" FORCE)
 	set(HARDLINK_GAME ON CACHE BOOL "Compile gamecode into executable (no game DLLs)" FORCE)
-	set(BASE ON CACHE BOOL "Build the base game code" FORCE)
-	set(D3XP OFF CACHE BOOL "Build the d3xp game code" FORCE)
+	if(D3WASM_GAME STREQUAL "roe")
+		set(BASE OFF CACHE BOOL "Build the base game code" FORCE)
+		set(D3XP ON CACHE BOOL "Build the d3xp game code" FORCE)
+	elseif(D3WASM_GAME STREQUAL "base")
+		set(BASE ON CACHE BOOL "Build the base game code" FORCE)
+		set(D3XP OFF CACHE BOOL "Build the d3xp game code" FORCE)
+	else()
+		message(FATAL_ERROR "D3WASM_GAME must be base or roe")
+	endif()
 	set(SDL2 ON CACHE BOOL "Use SDL2 instead of SDL1.2" FORCE)
 	set(SDL3 OFF CACHE BOOL "Use SDL3 instead of SDL2 or SDL1.2" FORCE)
 	set(IMGUI OFF CACHE BOOL "Build with Dear ImGui integration" FORCE)
@@ -91,11 +100,16 @@ if(D3WASM_CLIENT)
 		"-sFORCE_FILESYSTEM=1"
 		"-sMIN_WEBGL_VERSION=2"
 		"-sMAX_WEBGL_VERSION=2"
-		"-sFULL_ES3=1"
+		"-sUSE_WEBGL2=1"
+		"-sLEGACY_GL_EMULATION=1"
+		"-sOFFSCREENCANVAS_SUPPORT=1"
 		"-sEXIT_RUNTIME=0"
-		"-sENVIRONMENT=web"
+		"-sENVIRONMENT=worker"
+		"-sEXPORTED_RUNTIME_METHODS=FS,WORKERFS,IDBFS"
 		"-sASSERTIONS=1"
 		"-sDISABLE_EXCEPTION_CATCHING=0"
+		"-lworkerfs.js"
+		"-lidbfs.js"
 	)
 	string(REPLACE ";" " " D3WASM_LINK_FLAGS "${D3WASM_LINK_FLAGS}")
 	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${D3WASM_LINK_FLAGS}")
@@ -1321,9 +1335,11 @@ else()
 		sys/linux/main.cpp
 	)
 
-	set(src_sys_core
-		sys/glimp.cpp
-	)
+	if(D3WASM_CLIENT)
+		set(src_sys_core sys/glimp_emscripten.cpp)
+	else()
+		set(src_sys_core sys/glimp.cpp)
+	endif()
 endif()
 
 include_directories(${CMAKE_BINARY_DIR})
@@ -1380,7 +1396,11 @@ if(CORE)
 	target_include_directories(${DHEWM3BINARY} PRIVATE "${CMAKE_SOURCE_DIR}/libs/imgui")
 
 if(HARDLINK_GAME)
-	set_target_properties(${DHEWM3BINARY} PROPERTIES COMPILE_DEFINITIONS "${TOOLS_DEFINES}")
+	if(D3XP)
+		set_target_properties(${DHEWM3BINARY} PROPERTIES COMPILE_DEFINITIONS "${TOOLS_DEFINES};_D3XP;CTF")
+	else()
+		set_target_properties(${DHEWM3BINARY} PROPERTIES COMPILE_DEFINITIONS "${TOOLS_DEFINES}")
+	endif()
 	target_include_directories(${DHEWM3BINARY} PRIVATE ${game_includes})
 else()
 	set_target_properties(${DHEWM3BINARY} PROPERTIES COMPILE_DEFINITIONS "__DOOM_DLL__;${TOOLS_DEFINES}")

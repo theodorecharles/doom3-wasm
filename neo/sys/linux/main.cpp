@@ -422,6 +422,10 @@ static void D3WASM_Frame( void ) {
 #endif
 
 int main(int argc, char **argv) {
+#ifdef D3WASM_CLIENT
+	printf( "[doom3-wasm] native main entered\n" );
+	fflush( stdout );
+#endif
 	// Prevent running Doom 3 as root. Emscripten reports a synthetic uid in a
 	// browser sandbox, so the native filesystem safety check does not apply.
 	// Borrowed from Yamagi Quake II.
@@ -444,11 +448,17 @@ int main(int argc, char **argv) {
 	}
 
 	SetExecutablePath(path_exe);
+#ifdef D3WASM_CLIENT
+	printf( "[doom3-wasm] executable path initialized\n" ); fflush( stdout );
+#endif
 	if (path_exe[0] == '\0') {
 		memcpy(path_exe, path_argv, sizeof(path_exe));
 	}
 
 	SetSavePath();
+#ifdef D3WASM_CLIENT
+	printf( "[doom3-wasm] save path initialized\n" ); fflush( stdout );
+#endif
 
 	// some ladspa-plugins (that may be indirectly loaded by doom3 if they're
 	// used by alsa) call setlocale(LC_ALL, ""); This sets LC_ALL to $LANG or
@@ -457,7 +467,13 @@ int main(int argc, char **argv) {
 	// so set $LC_ALL to "C".
 	setenv("LC_ALL", "C", 1);
 
+#ifdef D3WASM_CLIENT
+	printf( "[doom3-wasm] initializing platform signal seam\n" ); fflush( stdout );
+#endif
 	Posix_InitSignalHandlers();
+#ifdef D3WASM_CLIENT
+	printf( "[doom3-wasm] entering common initialization\n" ); fflush( stdout );
+#endif
 
 	if ( argc > 1 ) {
 		common->Init( argc-1, &argv[1] );
@@ -466,6 +482,7 @@ int main(int argc, char **argv) {
 	}
 
 #ifdef D3WASM_CLIENT
+	common->Printf( "[doom3-wasm] common initialization complete; scheduling cooperative frames\n" );
 	emscripten_set_main_loop( D3WASM_Frame, 0, true );
 #else
 	while (1) {

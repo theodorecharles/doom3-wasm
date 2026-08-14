@@ -4,13 +4,11 @@ FROM nginx:1.27-alpine
 
 ARG VCS_REF=unknown
 LABEL org.opencontainers.image.title="Doom 3 WASM" \
-      org.opencontainers.image.description="Assetless Doom 3 WASM diagnostic checkpoint" \
+      org.opencontainers.image.description="Owner-data Doom 3 and RoE browser clients" \
       org.opencontainers.image.source="https://github.com/theodorecharles/doom3-wasm" \
       org.opencontainers.image.revision="$VCS_REF"
 
-COPY build/web/index.html /usr/share/nginx/html/index.html
-COPY build/web/dhewm3.js /usr/share/nginx/html/dhewm3.js
-COPY build/web/dhewm3.wasm /usr/share/nginx/html/dhewm3.wasm
+COPY build/web/ /usr/share/nginx/html/
 COPY build/native/dhewm3 /opt/doom3/bin/dhewm3
 COPY build/native/base.so /opt/doom3/bin/base.so
 COPY build/native/d3xp.so /opt/doom3/bin/d3xp.so
