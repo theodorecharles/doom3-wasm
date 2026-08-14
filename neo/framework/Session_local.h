@@ -114,6 +114,10 @@ public:
 	virtual void		Frame();
 
 	virtual bool		IsMultiplayer();
+#ifdef D3WASM_CLIENT
+	bool				IsGUIActive() const { return guiActive != NULL; }
+	bool				IsMapSpawned() const { return mapSpawned; }
+#endif
 
 	virtual bool		ProcessEvent( const sysEvent_t *event );
 

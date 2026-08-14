@@ -2,21 +2,23 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-image="${IMAGE_REPO:-theodorecharles/doom3-wasm}:${IMAGE_TAG:-dev}"
+image_repo="${IMAGE_REPO:-theodorecharles/doom3-wasm}"
+image_tag="${IMAGE_TAG:-dev}"
+framework_dir="${D3WASM_FRAMEWORK_DIR:-${repo_root}/../wasm-game-framework}"
 
 for artifact in \
-  build/web/index.html \
+  build/web/wasm-game.json \
+  build/web/wasm-game-data.json \
+  build/web/wasm-game-framework.json \
+  build/web/game-adapter.js \
+  build/web/doom3.ico \
+  build/web/doom3-pwa.svg \
+  build/web/roe.png \
   build/web/d3-worker.js \
   build/web/dhewm3-base.js \
   build/web/dhewm3-base.wasm \
   build/web/dhewm3-roe.js \
-  build/web/dhewm3-roe.wasm \
-  build/native/dhewm3 \
-  build/native/base.so \
-  build/native/d3xp.so \
-  build/server/dhewm3ded \
-  build/server/base.so \
-  build/server/d3xp.so; do
+  build/web/dhewm3-roe.wasm; do
   test -s "$repo_root/$artifact" || {
     echo "Missing $artifact; run scripts/build-web.sh and the native/server builds first." >&2
     exit 1
@@ -29,7 +31,13 @@ if find "$repo_root/build/web" -type f \( -iname '*.pk4' -o -iname '*.pak' \) -p
 fi
 
 unexpected_file="$(find "$repo_root/build/web" -type f ! \( \
-  -path "$repo_root/build/web/index.html" -o \
+  -path "$repo_root/build/web/wasm-game.json" -o \
+  -path "$repo_root/build/web/wasm-game-data.json" -o \
+  -path "$repo_root/build/web/wasm-game-framework.json" -o \
+  -path "$repo_root/build/web/game-adapter.js" -o \
+  -path "$repo_root/build/web/doom3.ico" -o \
+  -path "$repo_root/build/web/doom3-pwa.svg" -o \
+  -path "$repo_root/build/web/roe.png" -o \
   -path "$repo_root/build/web/d3-worker.js" -o \
   -path "$repo_root/build/web/dhewm3-base.js" -o \
   -path "$repo_root/build/web/dhewm3-base.wasm" -o \
@@ -41,7 +49,12 @@ if [[ -n "$unexpected_file" ]]; then
   exit 1
 fi
 
-docker build --platform linux/amd64 \
-  --build-arg "VCS_REF=$(git -C "$repo_root" rev-parse HEAD)" \
-  --tag "$image" "$repo_root"
-echo "Built $image"
+for variant in suite doom3 doom3-mp roe; do
+  if [[ "$variant" == suite ]]; then
+    image="${image_repo}:${image_tag}"
+  else
+    image="${image_repo}:${variant}-${image_tag}"
+  fi
+  "${framework_dir}/scripts/build-static-image.sh" "$repo_root/build/web" "$image" "$variant"
+done
+echo "Built Doom 3 suite plus doom3, doom3-mp, and roe locked images."

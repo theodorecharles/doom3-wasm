@@ -258,6 +258,16 @@ idCVar r_glDebugContext( "r_glDebugContext", "0", CVAR_RENDERER | CVAR_BOOL, "En
 #define QGLPROC(name, rettype, args) rettype (APIENTRYP q##name) args;
 #include "renderer/qgl_proc.h"
 
+#ifdef __EMSCRIPTEN__
+// WebGL deliberately omits a number of desktop compatibility entry points
+// which Doom 3 resolves eagerly but never uses in its ARB2 render path. Keep
+// typed fallbacks so the capability scan can complete without making indirect
+// calls through a mismatched generic function signature.
+#define QGLPROC(name, rettype, args) \
+	static rettype APIENTRY D3WASM_Missing_##name args { return (rettype)0; }
+#include "renderer/qgl_proc.h"
+#endif
+
 void ( APIENTRY * qglMultiTexCoord2fARB )( GLenum texture, GLfloat s, GLfloat t );
 void ( APIENTRY * qglMultiTexCoord2fvARB )( GLenum texture, GLfloat *st );
 void ( APIENTRY * qglActiveTextureARB )( GLenum texture );
@@ -546,6 +556,14 @@ static void R_CheckPortableExtensions( void ) {
 		}
 	}
 
+	// Emscripten's legacy GL layer implements the fixed-function combine and
+	// DOT3 operations needed by Doom 3, but WebGL does not advertise their old
+	// desktop extension names. Treat the linked emulation as the capability.
+#ifdef __EMSCRIPTEN__
+	glConfig.textureEnvCombineAvailable = true;
+	glConfig.envDot3Available = true;
+#endif
+
 	// check for minimum set
 	if ( !glConfig.multitextureAvailable || !glConfig.textureEnvCombineAvailable || !glConfig.cubeMapAvailable
 		|| !glConfig.envDot3Available ) {
@@ -819,13 +837,21 @@ void R_InitOpenGL( void ) {
 		r_multiSamples.SetInteger( 0 );
 	}
 
-// load qgl function pointers
 #define QGLPROC(name, rettype, args) \
 	q##name = (rettype(APIENTRYP)args)GLimp_ExtensionPointer(#name); \
-	if (!q##name) \
-		common->FatalError("Unable to initialize OpenGL (%s)", #name);
+	if (!q##name) { \
+		D3WASM_ASSIGN_MISSING_GL(name) \
+	}
+#ifndef __EMSCRIPTEN__
+#define D3WASM_ASSIGN_MISSING_GL(name) common->FatalError("Unable to initialize OpenGL (%s)", #name);
+#else
+#define D3WASM_ASSIGN_MISSING_GL(name) q##name = &D3WASM_Missing_##name;
+#endif
 
 #include "renderer/qgl_proc.h"
+
+#undef D3WASM_ASSIGN_MISSING_GL
+#undef QGLPROC
 
 	// input and sound systems need to be tied to the new window
 	Sys_InitInput();

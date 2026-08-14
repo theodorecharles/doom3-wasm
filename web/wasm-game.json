@@ -1,0 +1,85 @@
+{
+  "id": "doom3",
+  "kicker": "id Tech 4",
+  "defaultVariant": "doom3",
+  "description": "Run Doom 3 and Resurrection of Evil from your own registered game data.",
+  "displayMode": "dynamic",
+  "nativeManaged": true,
+  "syncBackbuffer": false,
+  "resizeTransition": "immediate",
+  "pointerWidth": 640,
+  "pointerHeight": 480,
+  "pointerFit": "contain",
+  "canvasWidth": 1280,
+  "canvasHeight": 720,
+  "maxDpr": 1,
+  "pointerLock": true,
+  "identity": true,
+  "graphics": true,
+  "advanced": true,
+  "profiles": [
+    { "value": "performance", "label": "Performance" },
+    { "value": "high", "label": "High" },
+    { "value": "ultra", "label": "Ultra" }
+  ],
+  "defaultProfile": "high",
+  "fpsTargets": [30, 60, 120],
+  "defaultFps": 60,
+  "defaultDynamicQuality": false,
+  "defaultPlayerName": "Marine",
+  "fullscreen": true,
+  "defaultFullscreen": false,
+  "icon": "/doom3.ico",
+  "iconPixelated": false,
+  "adapter": "/game-adapter.js",
+  "variants": {
+    "doom3": {
+      "title": "Doom 3",
+      "description": "Play the Doom 3 single-player campaign.",
+      "loadingTitle": "Starting Doom 3…",
+      "icon": "/doom3.ico",
+      "pwa": {
+        "name": "Doom 3",
+        "shortName": "Doom 3",
+        "description": "Doom 3 single-player in the browser, using owner-provided game data.",
+        "themeColor": "#67130c",
+        "backgroundColor": "#000000",
+        "icons": [
+          { "src": "/doom3-pwa.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+        ]
+      }
+    },
+    "doom3-mp": {
+      "title": "Doom 3 Multiplayer",
+      "description": "Open Doom 3's multiplayer client.",
+      "loadingTitle": "Starting Doom 3 multiplayer…",
+      "icon": "/doom3.ico",
+      "pwa": {
+        "name": "Doom 3 Multiplayer",
+        "shortName": "Doom 3 MP",
+        "description": "Doom 3 multiplayer in the browser, using owner-provided game data.",
+        "themeColor": "#67130c",
+        "backgroundColor": "#000000",
+        "icons": [
+          { "src": "/doom3-pwa.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+        ]
+      }
+    },
+    "roe": {
+      "title": "Doom 3: Resurrection of Evil",
+      "description": "Play the Resurrection of Evil expansion.",
+      "loadingTitle": "Starting Resurrection of Evil…",
+      "icon": "/roe.png",
+      "pwa": {
+        "name": "Doom 3: Resurrection of Evil",
+        "shortName": "Doom 3: RoE",
+        "description": "Resurrection of Evil in the browser, using owner-provided game data.",
+        "themeColor": "#32100c",
+        "backgroundColor": "#000000",
+        "icons": [
+          { "src": "/roe.png", "sizes": "64x64", "type": "image/png", "purpose": "any" }
+        ]
+      }
+    }
+  }
+}

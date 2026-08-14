@@ -44,6 +44,9 @@ If you have questions concerning this license or the applicable additional terms
 
 #ifdef D3WASM_CLIENT
 #include <emscripten/emscripten.h>
+#include "framework/Session_local.h"
+#include "sys/sys_sdl.h"
+#include "ui/UserInterface.h"
 #endif
 
 
@@ -412,12 +415,89 @@ main
 ===============
 */
 #ifdef D3WASM_CLIENT
+static int d3wasmLastBrowserState = -1;
+
+static int D3WASM_CurrentBrowserState( void ) {
+	if ( !sessLocal.IsMapSpawned() ) {
+		return 0;
+	}
+	return sessLocal.IsGUIActive() ? 2 : 1;
+}
+
+static void D3WASM_ReportBrowserState( void ) {
+	const int state = D3WASM_CurrentBrowserState();
+	if ( state == d3wasmLastBrowserState ) {
+		return;
+	}
+	d3wasmLastBrowserState = state;
+	EM_ASM( {
+		postMessage( { type: 'engine-state', state: $0 === 1 ? 'gameplay' : ($0 === 2 ? 'paused' : 'menu') } );
+	}, state );
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void D3WASM_BrowserOpenMenu( void ) {
+	if ( sessLocal.IsMapSpawned() ) {
+		sessLocal.StartMenu();
+	}
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void D3WASM_BrowserCapture( int captured ) {
+	Sys_GrabMouseCursor( captured != 0 );
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void D3WASM_BrowserPointer( int x, int y, int relative ) {
+	if ( !relative ) {
+		idUserInterface *activeGui = sessLocal.GetActiveMenu();
+		if ( activeGui != NULL ) {
+			activeGui->SetCursor( x, y );
+			return;
+		}
+	}
+	SDL_Event event = {};
+	event.type = SDL_MOUSEMOTION;
+	event.motion.x = relative ? 0 : x;
+	event.motion.y = relative ? 0 : y;
+	event.motion.xrel = relative ? x : 0;
+	event.motion.yrel = relative ? y : 0;
+	SDL_PushEvent( &event );
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void D3WASM_BrowserPointerButton( int browserButton, int down ) {
+	SDL_Event event = {};
+	event.type = down ? SDL_MOUSEBUTTONDOWN : SDL_MOUSEBUTTONUP;
+	event.button.button = browserButton == 2 ? SDL_BUTTON_RIGHT : browserButton == 1 ? SDL_BUTTON_MIDDLE : SDL_BUTTON_LEFT;
+	event.button.state = down ? SDL_PRESSED : SDL_RELEASED;
+	SDL_PushEvent( &event );
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void D3WASM_BrowserKey( int scan, int key, int down, int repeat ) {
+	SDL_Event event = {};
+	event.type = down ? SDL_KEYDOWN : SDL_KEYUP;
+	event.key.state = down ? SDL_PRESSED : SDL_RELEASED;
+	event.key.repeat = repeat ? 1 : 0;
+	event.key.keysym.scancode = static_cast<SDL_Scancode>( scan );
+	event.key.keysym.sym = key ? static_cast<SDL_Keycode>( key ) : SDL_GetKeyFromScancode( event.key.keysym.scancode );
+	SDL_PushEvent( &event );
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void D3WASM_BrowserText( int codepoint ) {
+	if ( codepoint <= 0 || codepoint > 0x7f ) {
+		return;
+	}
+	SDL_Event event = {};
+	event.type = SDL_TEXTINPUT;
+	event.text.text[0] = static_cast<char>( codepoint );
+	event.text.text[1] = '\0';
+	SDL_PushEvent( &event );
+}
+
 static void D3WASM_Frame( void ) {
 	// The native async thread is intentionally folded into the browser frame.
 	// This is enough for the single-thread checkpoint and keeps the browser event
 	// loop in control; audio cadence will need its own timer before playability.
 	common->Async();
 	common->Frame();
+	D3WASM_ReportBrowserState();
 }
 #endif
 
