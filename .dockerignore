@@ -7,6 +7,8 @@ artifacts
 references
 *.pk4
 *.PK4
+*.pk3
+*.PK3
 build/*
 !build/web/
 !build/web/dhewm3.js
