@@ -1,12 +1,12 @@
 # doom3-wasm implementation runbook
 
-Read `/home/ted/Development/WASM_PORTS_RUNBOOK.md` first. It defines shared shell, data, lifecycle, graphics, input, Docker, testing, and coordination rules. This file defines the Doom 3 and Resurrection of Evil implementation path.
+Read `../RUNBOOK.md` first. It defines shared shell, data, lifecycle, graphics, input, Docker, testing, and coordination rules. This file defines the Doom 3 and Resurrection of Evil implementation path.
 
 ## Objective
 
 Ship Doom 3 Single Player, Resurrection of Evil Single Player, and Doom 3 Multiplayer in a browser using the real id Tech 4 engine/game code and legally supplied Steam PK4s. Preserve authentic menus/HUD/GUIs, campaigns, AI, scripted events, saves, cinematics, renderer, stencil shadows where feasible, audio, console, multiplayer, and dedicated server.
 
-## Current checkpoint
+## Verified checkpoint (2026-08-14)
 
 - Downstream repository: `theodorecharles/doom3-wasm`.
 - Implementation base: `dhewm/dhewm3`.
@@ -14,14 +14,29 @@ Ship Doom 3 Single Player, Resurrection of Evil Single Player, and Doom 3 Multip
 - Original id Doom 3 GPL source belongs in ignored `references/doom3-source/`.
 - dhewm3 provides SDL, CMake, widescreen fixes, Doom 3 and RoE data compatibility, and a `DEDICATED=ON` native server build.
 - dhewm3 has no maintained Emscripten target. This is a real id Tech 4 platform and renderer port.
-- Steam apps 9050 and 9070 reported `StateFlags 4` with all bytes downloaded and staged when re-checked on 2026-08-13. The base and `d3xp` PK4 sets are present, but they have not been copied, packaged, or browser-tested; asset/title/playability milestones remain unproven.
-- Release native client and `DEDICATED=ON` configurations build successfully. The initial `D3WASM_CLIENT` configuration hardlinks base game code and emits `build/web/dhewm3.js` plus `build/web/dhewm3.wasm` with Emscripten 6.0.6.
-- Browser engine initialization, WebGL renderer compatibility, the non-blocking main loop, asset mounting, Doom 3 SP, RoE SP, and Doom 3 MP are not yet proven.
+- Steam apps 9050 and 9070 report `StateFlags 4`. The owner installation remains untouched at `/home/ted/.steam/debian-installation/steamapps/common/Doom 3`: the 13 base PK4s total 1,563,140,716 bytes and the 6 `d3xp` PK4s total 546,020,038 bytes. No PK4 is in this worktree, image, or web root.
+- `./scripts/build-web.sh` regenerated the Emscripten build from the current native dhewm3 source and completed all 283 targets with Emscripten 6.0.6. It emits `build/web/index.html` (3,455 bytes), `dhewm3.js` (341,806 bytes), and `dhewm3.wasm` (5,176,331 bytes).
+- The web build hardlinks the Doom 3 base game (`BASE=ON`, `D3XP=OFF`). C++ exception catching is enabled, memory grows from 128 MiB up to 2 GiB, and the context target is WebGL 2.
+- The infinite native loop now uses `emscripten_set_main_loop`. The native async thread is disabled for this single-thread checkpoint and `Async()` runs before each browser frame. Native frame throttling no longer sleeps the browser main thread.
+- The launcher starts the real engine bundle on an explicit click and captures stdout/stderr/abort messages in the page. It does not request, upload, or serve retail data.
+- JavaScript syntax, WASM magic, staged-launcher equality, and HTTP delivery were checked locally. Chrome runtime execution was not performed: Chrome was offline after the preceding serialized Quake 4 test. See the exact handoff below.
 
-### Docker checkpoint (2026-08-14)
+### Current status by product
 
-- `scripts/build-docker.sh` builds `theodorecharles/doom3-wasm:dev` for `linux/amd64` from the real WASM diagnostic artifact and native client/dedicated baselines.
-- The image serves the diagnostic page and `/health` on port 8088, mounts owner data at `/data`, and contains zero retail PK4 files. It does not claim Doom 3/RoE browser playability.
+| Product | Compiles for web | Browser initialized | Retail data loaded | Playable |
+| --- | --- | --- | --- | --- |
+| Doom 3 base/SP | Yes, hardlinked | Not tested in Chrome | No | No |
+| Doom 3 multiplayer client | Same base executable, unproven | No | No | No |
+| Resurrection of Evil/SP | No; `D3XP=OFF` in this target | No | No | No |
+| Native dedicated server | Older baseline artifacts exist; not rebuilt after the workspace move | N/A | Not tested | No claim |
+
+Do not infer title-screen, renderer, input, sound, SP, MP, or RoE support from the successful compile.
+
+### Docker checkpoint
+
+- The Dockerfile stages the launcher and engine artifacts at the Nginx document root. `/data` remains available only for future native-server work; Nginx explicitly returns 404 for `/data/` and has no upload method.
+- The unauthenticated WebDAV `PUT` uploader and public `/data` alias from the discarded Luna diff were removed. Never restore that design.
+- The image was not rebuilt in this checkpoint. `scripts/build-docker.sh` still requires native client/server artifacts, and those need a clean current-path rebuild plus an image-runtime dependency audit before this image is called operational.
 
 ## Downstream-only rule
 
@@ -52,7 +67,7 @@ cmake -S neo -B build/server -DCMAKE_BUILD_TYPE=Release -DDEDICATED=ON
 cmake --build build/server --parallel
 ```
 
-Then add an Emscripten CMake preset/toolchain path:
+The maintained wrapper configures the Emscripten CMake toolchain with:
 
 ```bash
 source /home/ted/emsdk/emsdk_env.sh
@@ -63,7 +78,7 @@ emcmake cmake -S neo -B build/web -G Ninja \
 cmake --build build/web --parallel 2
 ```
 
-`D3WASM_CLIENT` is a downstream option to create; it should make platform choices explicit rather than rely on a giant permanent command. Compile immediately and fix one blocker at a time.
+`D3WASM_CLIENT` is the downstream option that makes platform choices explicit rather than relying on a giant permanent command. Compile immediately and fix one blocker at a time.
 
 ## First platform reductions
 
@@ -106,7 +121,9 @@ After Steam completes, validate actual files under:
 
 Do not commit, publish, or bake them into the Docker image. Doom 3/RoE data is multi-gigabyte; never preload every PK4 into WASM linear memory or one `index.data` blob.
 
-Implement a read-only lazy PK4 filesystem backed by same-origin HTTP range/chunk requests and IndexedDB/OPFS. Central directory metadata may be indexed early, but file contents load on demand. Writable saves/configs live in a separate persistent mount. Code bundle version changes must not invalidate unchanged retail PK4 caches.
+Do not expose `/data`, accept browser uploads, or serve retail files over HTTP. The browser must obtain owner data locally through an explicit directory/file picker and retain user-granted handles where supported. Implement a read-only lazy PK4 filesystem backed by `FileSystemFileHandle` reads and an OPFS/IndexedDB index; do not copy multi-gigabyte archives into MEMFS or WASM linear memory. Central-directory metadata may be indexed early, file contents load on demand, and writable saves/configs live in a separate persistent mount. Code-bundle changes must not invalidate unchanged owner PK4 indexes.
+
+Docker-mounted `/data/base` and `/data/d3xp` are for the native dedicated server only. They must never appear under the HTTP document root or an Nginx alias. Every browser client supplies its own legally owned data locally.
 
 ## Campaign/menu routing
 
@@ -171,16 +188,55 @@ GAME_MODE=vanilla
 
 Use `/data/base`, `/data/d3xp`, and `/data/custom_maps`. Startup clearly reports incomplete Doom 3 versus missing RoE. Build `linux/amd64` first.
 
-## First worker assignment
+## Build and local run
 
-1. Re-check Steam app 9050/9070 completion and do not modify the Steam installation.
-2. Prove native client and dedicated configurations without retail data if necessary.
-3. Add the smallest Emscripten CMake option/platform stub and compile immediately.
-4. Classify the first 20 compiler/linker blockers by platform, renderer, audio, threading, filesystem, or game-module loading; fix the first, not all speculatively.
-5. Produce a substantial WASM artifact and thin diagnostic launcher before asset work.
-6. Return the exact engine-init browser test handoff to Luna; do not use Chrome.
-7. Commit and push `devel`.
+```bash
+cd /path/to/doom3-wasm
+./scripts/build-web.sh
+python3 -m http.server 8094 --bind 127.0.0.1 --directory build/web
+```
 
-## Status handoff
+Open `http://127.0.0.1:8094/`. The page deliberately does not start the engine until **Start assetless engine smoke** is clicked. Do not point this server at the Steam installation or copy PK4s into `build/web`.
 
-Report Doom 3 SP, RoE SP, and MP separately; exact commands; artifact paths; Steam state; browser test request; renderer/platform blocker; and `Upstream contacted: no`.
+The first build after moving a checkout may fail because an ignored `build/web/CMakeCache.txt` contains the old absolute path. Remove only that generated directory with:
+
+```bash
+cmake -E remove_directory build/web
+./scripts/build-web.sh
+```
+
+## Serialized Chrome handoff
+
+Chrome was unavailable for this checkpoint, so this remains an exact test request rather than a claimed result:
+
+1. Ensure no other id Tech browser smoke is running.
+2. Start the local server using the command above.
+3. In Chrome, open `http://127.0.0.1:8094/?smoke=20260814`.
+4. Confirm the page initially says `Not started` and no `dhewm3.js`/`.wasm` request occurs before the click.
+5. Click **Start assetless engine smoke** once.
+6. Confirm both artifacts return HTTP 200, the page reports `WASM runtime initialized`, and capture the final engine log/abort text.
+7. A clean missing-retail-data stop is the expected assetless outcome. A freeze, tab crash, JavaScript syntax error, missing `Module.canvas`, pthread creation, or a blocking-loop warning is a regression.
+
+If the engine gets beyond the data check, stop after recording the first renderer/platform error. Do not start a renderer-polish loop in this test.
+
+## Exact tests run
+
+- `./scripts/build-web.sh` — pass, 283/283 targets linked.
+- `node --check build/web/dhewm3.js` — pass.
+- WASM magic `00 61 73 6d` — pass.
+- `cmp web/index.html build/web/index.html` — pass.
+- Python HTTP server HEAD requests for `/`, `/dhewm3.js`, and `/dhewm3.wasm` — HTTP 200 with correct JavaScript/WASM MIME types.
+- Search for tracked/worktree PK4/WAD retail files — zero.
+- Search for `dav_methods`, `/data` alias, `PUT`, and the Luna data-ingest module — zero.
+- `git diff --check` — pass.
+- Chrome runtime smoke — not run; browser unavailable after the prior Quake 4 crash.
+
+## Next blockers
+
+1. Run the serialized assetless Chrome handoff and record the first real engine-init gate.
+2. Build a local-picker-backed lazy PK4 filesystem using file handles/OPFS, never HTTP or bulk MEMFS preload.
+3. Translate the desktop ARB program renderer to WebGL 2/GLSL ES. Compilation does not prove this renderer path.
+4. Give RoE its own `BASE=OFF`, `D3XP=ON`, `HARDLINK_GAME=ON` web artifact and test it separately.
+5. Rebuild/audit the native dedicated server and add the WebSocket-to-UDP multiplayer bridge only after the base client initializes.
+
+Report Doom 3 SP, RoE SP, and MP separately on every handoff. Upstream contacted: no. Upstream submission: forbidden.

@@ -42,6 +42,10 @@ If you have questions concerning this license or the applicable additional terms
 
 #include <locale.h>
 
+#ifdef D3WASM_CLIENT
+#include <emscripten/emscripten.h>
+#endif
+
 
 
 #undef snprintf // no, I don't want to use idStr::snPrintf() here.
@@ -407,6 +411,16 @@ void idSysLocal::OpenURL( const char *url, bool quit ) {
 main
 ===============
 */
+#ifdef D3WASM_CLIENT
+static void D3WASM_Frame( void ) {
+	// The native async thread is intentionally folded into the browser frame.
+	// This is enough for the single-thread checkpoint and keeps the browser event
+	// loop in control; audio cadence will need its own timer before playability.
+	common->Async();
+	common->Frame();
+}
+#endif
+
 int main(int argc, char **argv) {
 	// Prevent running Doom 3 as root. Emscripten reports a synthetic uid in a
 	// browser sandbox, so the native filesystem safety check does not apply.
@@ -451,8 +465,12 @@ int main(int argc, char **argv) {
 		common->Init( 0, NULL );
 	}
 
+#ifdef D3WASM_CLIENT
+	emscripten_set_main_loop( D3WASM_Frame, 0, true );
+#else
 	while (1) {
 		common->Frame();
 	}
+#endif
 	return 0;
 }

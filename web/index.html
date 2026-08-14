@@ -3,49 +3,75 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Doom 3 WASM build diagnostic</title>
+  <title>Doom 3 WASM engine checkpoint</title>
   <style>
     :root { color-scheme: dark; font-family: system-ui, sans-serif; }
-    body { max-width: 48rem; margin: 4rem auto; padding: 0 1.25rem; background: #111; color: #eee; }
-    button { padding: .7rem 1rem; font: inherit; }
-    li { margin: .6rem 0; }
-    .pass { color: #72db8c; }
-    .fail { color: #ff7b72; }
+    body { margin: 0; background: #080808; color: #eee; }
+    main { width: min(64rem, calc(100% - 2rem)); margin: 2rem auto; }
+    .panel { padding: 1rem; border: 1px solid #444; background: #151515; }
+    button { padding: .7rem 1rem; font: inherit; cursor: pointer; }
+    button:disabled { cursor: wait; opacity: .7; }
+    canvas { display: block; width: 100%; aspect-ratio: 16 / 9; margin-top: 1rem; background: #000; }
+    pre { min-height: 12rem; max-height: 24rem; overflow: auto; margin: 1rem 0 0; padding: 1rem; background: #000; color: #d8d8d8; white-space: pre-wrap; }
+    .status { color: #9fd7ff; }
     code { color: #ddd; }
   </style>
 </head>
 <body>
   <main>
-    <h1>Doom 3 WASM build diagnostic</h1>
-    <p>This checkpoint validates engine artifacts only. It does not load retail PK4s or claim Doom 3 or RoE playability.</p>
-    <button id="validate" type="button">Validate build artifacts</button>
-    <ul id="results" aria-live="polite"></ul>
+    <h1>Doom 3 WASM engine checkpoint</h1>
+    <section class="panel">
+      <p>This page starts the real downstream dhewm3 Emscripten client without retail data. It is an engine initialization smoke test, not a playable Doom 3 or Resurrection of Evil build.</p>
+      <p>Owner PK4s are intentionally neither uploaded nor served by this page. Browser asset loading still needs a lazy local filesystem that does not copy multi-gigabyte archives into WASM memory.</p>
+      <button id="start" type="button">Start assetless engine smoke</button>
+      <span id="status" class="status" role="status">Not started</span>
+    </section>
+    <canvas id="canvas" width="960" height="540" tabindex="0" aria-label="Doom 3 engine canvas"></canvas>
+    <pre id="log" aria-live="polite">[doom3-wasm] Launcher ready. Retail data has not been requested.</pre>
   </main>
   <script>
-    const results = document.querySelector('#results');
-    const report = (message, passed) => {
-      const item = document.createElement('li');
-      item.className = passed ? 'pass' : 'fail';
-      item.textContent = `${passed ? 'PASS' : 'FAIL'}: ${message}`;
-      results.append(item);
-    };
+    const button = document.querySelector('#start');
+    const status = document.querySelector('#status');
+    const log = document.querySelector('#log');
+    const canvas = document.querySelector('#canvas');
+    let started = false;
 
-    document.querySelector('#validate').addEventListener('click', async () => {
-      results.replaceChildren();
-      try {
-        const [glue, wasm] = await Promise.all([
-          fetch('../build/web/dhewm3.js', { method: 'HEAD' }),
-          fetch('../build/web/dhewm3.wasm')
-        ]);
-        report('JavaScript glue is served', glue.ok);
-        const bytes = new Uint8Array(await wasm.arrayBuffer());
-        const validMagic = wasm.ok && bytes.length > 4 &&
-          bytes[0] === 0x00 && bytes[1] === 0x61 && bytes[2] === 0x73 && bytes[3] === 0x6d;
-        report(`WebAssembly module is served (${bytes.length.toLocaleString()} bytes)`, validMagic);
-        report('launcher remains diagnostic-only; no retail data was requested', true);
-      } catch (error) {
-        report(error.message, false);
-      }
+    function append(message, kind = 'stdout') {
+      const line = String(message ?? '');
+      log.textContent += `\n[${kind}] ${line}`;
+      log.scrollTop = log.scrollHeight;
+    }
+
+    button.addEventListener('click', () => {
+      if (started) return;
+      started = true;
+      button.disabled = true;
+      status.textContent = 'Loading real dhewm3 WebAssembly…';
+      append('Starting engine without owner PK4s; a missing-data stop is expected.');
+
+      window.Module = {
+        canvas,
+        arguments: ['+set', 'fs_basepath', '/owner-data', '+set', 'fs_savepath', '/save'],
+        print: (message) => append(message),
+        printErr: (message) => append(message, 'stderr'),
+        onRuntimeInitialized: () => {
+          status.textContent = 'WASM runtime initialized; engine startup is running';
+          append('Emscripten runtime initialized.');
+        },
+        onAbort: (reason) => {
+          status.textContent = 'Engine stopped at the expected asset/platform gate';
+          append(`Engine abort: ${reason}`, 'abort');
+        }
+      };
+
+      const script = document.createElement('script');
+      script.src = './dhewm3.js';
+      script.async = true;
+      script.onerror = () => {
+        status.textContent = 'Engine JavaScript failed to load';
+        append('Could not load dhewm3.js', 'error');
+      };
+      document.body.append(script);
     });
   </script>
 </body>

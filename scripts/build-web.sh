@@ -21,6 +21,9 @@ cmake --build "${repo_root}/build/web" --parallel "${jobs}"
 
 node --check "${repo_root}/build/web/dhewm3.js"
 test "$(od -An -tx1 -N4 "${repo_root}/build/web/dhewm3.wasm" | tr -d ' \n')" = "0061736d"
+
+# Keep the browser checkpoint self-contained without copying retail data.
+install -m 0644 "${repo_root}/web/index.html" "${repo_root}/build/web/index.html"
 printf 'Built %s and %s\n' \
 	"${repo_root}/build/web/dhewm3.js" \
 	"${repo_root}/build/web/dhewm3.wasm"

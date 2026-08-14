@@ -2560,6 +2560,7 @@ void idCommonLocal::Frame( void ) {
 		if ( com_editors == 0 )
 #endif
 		{
+#ifndef D3WASM_CLIENT
 			if ( com_timescale.GetFloat() == 1.0f && GLimp_GetSwapInterval() != 0
 				&& fabsf(60.0f - GLimp_GetDisplayRefresh()) < 1.0f ) {
 				// if we're using vsync and the display is running at about 60Hz, start next tic
@@ -2573,6 +2574,7 @@ void idCommonLocal::Frame( void ) {
 				Com_WaitForNextTicStart();
 			}
 			// else the com_ticNumber has already been updated and it's past time to start the next frame
+#endif
 		}
 
 		D3P_FRAMEMARK // tell profiler (tracy) that this is the end of a frame
@@ -3175,8 +3177,14 @@ void idCommonLocal::Init( int argc, char **argv ) {
 		Sys_Error( "Error during initialization" );
 	}
 
+#ifndef D3WASM_CLIENT
 	runAsyncThread = true;
 	Sys_CreateThread( AsyncThread, this, asyncThread, "AsyncThread" );
+#else
+	// Emscripten is single-threaded at this checkpoint. The browser main-loop
+	// callback invokes Async() before Frame() instead of creating a pthread.
+	runAsyncThread = false;
+#endif
 }
 
 

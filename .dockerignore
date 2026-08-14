@@ -11,6 +11,7 @@ references
 *.PK3
 build/*
 !build/web/
+!build/web/index.html
 !build/web/dhewm3.js
 !build/web/dhewm3.wasm
 !build/native/

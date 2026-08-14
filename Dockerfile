@@ -8,9 +8,9 @@ LABEL org.opencontainers.image.title="Doom 3 WASM" \
       org.opencontainers.image.source="https://github.com/theodorecharles/doom3-wasm" \
       org.opencontainers.image.revision="$VCS_REF"
 
-COPY web /usr/share/nginx/html/web
-COPY build/web/dhewm3.js /usr/share/nginx/html/build/web/dhewm3.js
-COPY build/web/dhewm3.wasm /usr/share/nginx/html/build/web/dhewm3.wasm
+COPY build/web/index.html /usr/share/nginx/html/index.html
+COPY build/web/dhewm3.js /usr/share/nginx/html/dhewm3.js
+COPY build/web/dhewm3.wasm /usr/share/nginx/html/dhewm3.wasm
 COPY build/native/dhewm3 /opt/doom3/bin/dhewm3
 COPY build/native/base.so /opt/doom3/bin/base.so
 COPY build/native/d3xp.so /opt/doom3/bin/d3xp.so

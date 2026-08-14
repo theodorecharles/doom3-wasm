@@ -5,7 +5,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 image="${IMAGE_REPO:-theodorecharles/doom3-wasm}:${IMAGE_TAG:-dev}"
 
 for artifact in \
-  web/index.html \
+  build/web/index.html \
   build/web/dhewm3.js \
   build/web/dhewm3.wasm \
   build/native/dhewm3 \
