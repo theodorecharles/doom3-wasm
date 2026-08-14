@@ -31,6 +31,42 @@ If you have questions concerning this license or the applicable additional terms
 
 #include "sound/snd_local.h"
 
+#ifdef D3WASM_CLIENT
+
+idSoundEffect::idSoundEffect() : effect( 0 ) {
+}
+
+idSoundEffect::~idSoundEffect() {
+}
+
+bool idSoundEffect::alloc() {
+	return false;
+}
+
+idEFXFile::idEFXFile() {
+}
+
+idEFXFile::~idEFXFile() {
+}
+
+void idEFXFile::Clear() {
+	effects.DeleteContents( true );
+}
+
+bool idEFXFile::FindEffect( idStr &, ALuint * ) {
+	return false;
+}
+
+bool idEFXFile::ReadEffect( idLexer &, idSoundEffect * ) {
+	return false;
+}
+
+bool idEFXFile::LoadFile( const char *, bool ) {
+	return false;
+}
+
+#else
+
 #define mB_to_gain(millibels, property) \
 	_mB_to_gain(millibels,AL_EAXREVERB_MIN_ ## property, AL_EAXREVERB_MAX_ ## property)
 
@@ -303,3 +339,5 @@ bool idEFXFile::LoadFile( const char *filename, bool OSPath ) {
 
 	return true;
 }
+
+#endif // D3WASM_CLIENT

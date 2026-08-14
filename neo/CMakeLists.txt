@@ -55,6 +55,7 @@ if(MSVC)
 	option(TOOLS		"Build the tools game code (Visual Studio+SDL2/SDL3 only)" OFF)
 endif()
 option(DEDICATED	"Build the dedicated server" OFF)
+option(D3WASM_CLIENT "Build the initial single-threaded Emscripten client" OFF)
 option(ONATIVE		"Optimize for the host CPU" OFF)
 option(SDL2			"Use SDL2 instead of SDL1.2" ON)
 option(SDL3			"Use SDL3 instead of SDL2 or SDL1.2" OFF)
@@ -64,6 +65,26 @@ option(REPRODUCIBLE_BUILD "Replace __DATE__ and __TIME__ by hardcoded values for
 option(TRACY		"Build and integrate the Tracy profiler, requires HARDLINK_GAME" OFF)
 
 option(HARDLINK_GAME "Compile gamecode into executable (no game DLLs)" OFF)
+
+if(D3WASM_CLIENT)
+	if(NOT EMSCRIPTEN)
+		message(FATAL_ERROR "D3WASM_CLIENT requires the Emscripten CMake toolchain")
+	endif()
+
+	# The first browser checkpoint is a statically linked Doom 3 client. RoE
+	# will use a separate hardlinked build until browser-side modules exist.
+	set(DEDICATED OFF CACHE BOOL "Build the dedicated server" FORCE)
+	set(HARDLINK_GAME ON CACHE BOOL "Compile gamecode into executable (no game DLLs)" FORCE)
+	set(BASE ON CACHE BOOL "Build the base game code" FORCE)
+	set(D3XP OFF CACHE BOOL "Build the d3xp game code" FORCE)
+	set(SDL2 ON CACHE BOOL "Use SDL2 instead of SDL1.2" FORCE)
+	set(SDL3 OFF CACHE BOOL "Use SDL3 instead of SDL2 or SDL1.2" FORCE)
+	set(IMGUI OFF CACHE BOOL "Build with Dear ImGui integration" FORCE)
+	set(CMAKE_DISABLE_FIND_PACKAGE_CURL TRUE)
+	add_compile_options("-sUSE_SDL=2")
+	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -sUSE_SDL=2")
+	add_definitions(-DD3WASM_CLIENT=1)
+endif()
 
 if(NOT MSVC) # GCC/clang or compatible, hopefully
 	option(FORCE_COLORED_OUTPUT "Always produce ANSI-colored compiler warnings/errors (GCC/Clang only; esp. useful with ninja)." OFF)
@@ -196,6 +217,13 @@ endif()
 # libs
 find_package(OpenAL REQUIRED)
 include_directories(${OPENAL_INCLUDE_DIR})
+
+if(D3WASM_CLIENT)
+	# Emscripten's SDL2 port installs headers below the same sysroot include
+	# directory as OpenAL, but dhewm3's legacy finder does not search there.
+	get_filename_component(D3WASM_SYSROOT_INCLUDE "${OPENAL_INCLUDE_DIR}" DIRECTORY)
+	set(SDL2_INCLUDE_DIR "${D3WASM_SYSROOT_INCLUDE}/SDL2" CACHE PATH "Emscripten SDL2 headers" FORCE)
+endif()
 
 if (SDL3)
 	if(SDL2)
@@ -368,7 +396,7 @@ if(D3_COMPILER_IS_GCC_OR_CLANG)
 
 	if(NOT CMAKE_CROSSCOMPILING AND ONATIVE)
 		add_compile_options(-march=native)
-	elseif(NOT APPLE AND cpu STREQUAL "x86")
+	elseif(NOT D3WASM_CLIENT AND NOT APPLE AND cpu STREQUAL "x86")
 		add_compile_options(-march=pentium3)
 	endif()
 

@@ -43,9 +43,53 @@ If you have questions concerning this license or the applicable additional terms
 #include <AL/alc.h>
 #include <AL/alext.h>
 
+#if defined(D3WASM_CLIENT) && !defined(ALC_EXT_EFX)
+// Emscripten's OpenAL emulation intentionally omits the EFX API. Keep the
+// existing sound mixer buildable while the browser client reports EFX as
+// unavailable at runtime.
+#ifndef AL_APIENTRY
+#define AL_APIENTRY
+#endif
+#ifndef ALC_APIENTRY
+#define ALC_APIENTRY
+#endif
+typedef void (AL_APIENTRY *LPALGENEFFECTS)(ALsizei, ALuint *);
+typedef void (AL_APIENTRY *LPALDELETEEFFECTS)(ALsizei, const ALuint *);
+typedef ALboolean (AL_APIENTRY *LPALISEFFECT)(ALuint);
+typedef void (AL_APIENTRY *LPALEFFECTI)(ALuint, ALenum, ALint);
+typedef void (AL_APIENTRY *LPALEFFECTF)(ALuint, ALenum, ALfloat);
+typedef void (AL_APIENTRY *LPALEFFECTFV)(ALuint, ALenum, const ALfloat *);
+typedef void (AL_APIENTRY *LPALGENFILTERS)(ALsizei, ALuint *);
+typedef void (AL_APIENTRY *LPALDELETEFILTERS)(ALsizei, const ALuint *);
+typedef ALboolean (AL_APIENTRY *LPALISFILTER)(ALuint);
+typedef void (AL_APIENTRY *LPALFILTERI)(ALuint, ALenum, ALint);
+typedef void (AL_APIENTRY *LPALFILTERF)(ALuint, ALenum, ALfloat);
+typedef void (AL_APIENTRY *LPALGENAUXILIARYEFFECTSLOTS)(ALsizei, ALuint *);
+typedef void (AL_APIENTRY *LPALDELETEAUXILIARYEFFECTSLOTS)(ALsizei, const ALuint *);
+typedef ALboolean (AL_APIENTRY *LPALISAUXILIARYEFFECTSLOT)(ALuint);
+typedef void (AL_APIENTRY *LPALAUXILIARYEFFECTSLOTI)(ALuint, ALenum, ALint);
+typedef void (AL_APIENTRY *LPALAUXILIARYEFFECTSLOTF)(ALuint, ALenum, ALfloat);
+
+#define AL_DIRECT_FILTER             0x20005
+#define AL_AUXILIARY_SEND_FILTER     0x20006
+#define AL_EFFECTSLOT_EFFECT         0x0001
+#define AL_EFFECTSLOT_GAIN           0x0002
+#define AL_EFFECTSLOT_NULL           0x0000
+#define AL_LOWPASS_GAIN              0x0001
+#define AL_LOWPASS_GAINHF            0x0002
+#define AL_FILTER_TYPE               0x8001
+#define AL_FILTER_NULL               0x0000
+#define AL_FILTER_LOWPASS            0x0001
+#define ALC_CONNECTED                0x0313
+#endif
+
+#ifdef D3WASM_CLIENT
+typedef ALCboolean (ALC_APIENTRY *LPALCRESETDEVICESOFT)(ALCdevice *, const ALCint *);
+#endif
+
 // DG: make this code build with older OpenAL headers that don't know about ALC_SOFT_HRTF
 //     which provides LPALCRESETDEVICESOFT for idSoundSystemLocal::alcResetDeviceSOFT()
-#ifndef ALC_SOFT_HRTF
+#if !defined(ALC_SOFT_HRTF) && !defined(D3WASM_CLIENT)
   typedef ALCboolean (ALC_APIENTRY*LPALCRESETDEVICESOFT)(ALCdevice *device, const ALCint *attribs);
 #endif
 

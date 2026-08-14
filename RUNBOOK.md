@@ -14,7 +14,9 @@ Ship Doom 3 Single Player, Resurrection of Evil Single Player, and Doom 3 Multip
 - Original id Doom 3 GPL source belongs in ignored `references/doom3-source/`.
 - dhewm3 provides SDL, CMake, widescreen fixes, Doom 3 and RoE data compatibility, and a `DEDICATED=ON` native server build.
 - dhewm3 has no maintained Emscripten target. This is a real id Tech 4 platform and renderer port.
-- Steam apps 9050 and 9070 are not currently complete. `/home/ted/.steam/debian-installation/steamapps/common/Doom 3` contains only partial data. Asset/title/playability milestones are blocked until Steam finishes both Doom 3 and Resurrection of Evil.
+- Steam apps 9050 and 9070 reported `StateFlags 4` with all bytes downloaded and staged when re-checked on 2026-08-13. The base and `d3xp` PK4 sets are present, but they have not been copied, packaged, or browser-tested; asset/title/playability milestones remain unproven.
+- Release native client and `DEDICATED=ON` configurations build successfully. The initial `D3WASM_CLIENT` configuration hardlinks base game code and emits `build/web/dhewm3.js` plus `build/web/dhewm3.wasm` with Emscripten 6.0.6.
+- Browser engine initialization, WebGL renderer compatibility, the non-blocking main loop, asset mounting, Doom 3 SP, RoE SP, and Doom 3 MP are not yet proven.
 
 ## Downstream-only rule
 

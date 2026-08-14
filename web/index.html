@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Doom 3 WASM build diagnostic</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    body { max-width: 48rem; margin: 4rem auto; padding: 0 1.25rem; background: #111; color: #eee; }
+    button { padding: .7rem 1rem; font: inherit; }
+    li { margin: .6rem 0; }
+    .pass { color: #72db8c; }
+    .fail { color: #ff7b72; }
+    code { color: #ddd; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Doom 3 WASM build diagnostic</h1>
+    <p>This checkpoint validates engine artifacts only. It does not load retail PK4s or claim Doom 3 or RoE playability.</p>
+    <button id="validate" type="button">Validate build artifacts</button>
+    <ul id="results" aria-live="polite"></ul>
+  </main>
+  <script>
+    const results = document.querySelector('#results');
+    const report = (message, passed) => {
+      const item = document.createElement('li');
+      item.className = passed ? 'pass' : 'fail';
+      item.textContent = `${passed ? 'PASS' : 'FAIL'}: ${message}`;
+      results.append(item);
+    };
+
+    document.querySelector('#validate').addEventListener('click', async () => {
+      results.replaceChildren();
+      try {
+        const [glue, wasm] = await Promise.all([
+          fetch('../build/web/dhewm3.js', { method: 'HEAD' }),
+          fetch('../build/web/dhewm3.wasm')
+        ]);
+        report('JavaScript glue is served', glue.ok);
+        const bytes = new Uint8Array(await wasm.arrayBuffer());
+        const validMagic = wasm.ok && bytes.length > 4 &&
+          bytes[0] === 0x00 && bytes[1] === 0x61 && bytes[2] === 0x73 && bytes[3] === 0x6d;
+        report(`WebAssembly module is served (${bytes.length.toLocaleString()} bytes)`, validMagic);
+        report('launcher remains diagnostic-only; no retail data was requested', true);
+      } catch (error) {
+        report(error.message, false);
+      }
+    });
+  </script>
+</body>
+</html>
