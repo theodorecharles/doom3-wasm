@@ -1,0 +1,34 @@
+# syntax=docker/dockerfile:1.7
+
+FROM nginx:1.27-alpine
+
+ARG VCS_REF=unknown
+LABEL org.opencontainers.image.title="Doom 3 WASM" \
+      org.opencontainers.image.description="Assetless Doom 3 WASM diagnostic checkpoint" \
+      org.opencontainers.image.source="https://github.com/theodorecharles/doom3-wasm" \
+      org.opencontainers.image.revision="$VCS_REF"
+
+COPY web /usr/share/nginx/html/web
+COPY build/web/dhewm3.js /usr/share/nginx/html/build/web/dhewm3.js
+COPY build/web/dhewm3.wasm /usr/share/nginx/html/build/web/dhewm3.wasm
+COPY build/native/dhewm3 /opt/doom3/bin/dhewm3
+COPY build/native/base.so /opt/doom3/bin/base.so
+COPY build/native/d3xp.so /opt/doom3/bin/d3xp.so
+COPY build/server/dhewm3ded /opt/doom3/bin/dhewm3ded
+COPY build/server/base.so /opt/doom3/server/base.so
+COPY build/server/d3xp.so /opt/doom3/server/d3xp.so
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+
+RUN mkdir -p /data/base /data/d3xp /data/custom_maps /opt/doom3/bin /opt/doom3/server \
+    && chmod 0755 /opt/doom3/bin/dhewm3 /opt/doom3/bin/dhewm3ded
+
+ENV HTTP_PORT=8088 \
+    GAME_SLOTS=8 \
+    KEEP_ALIVE=false \
+    IDLE_TIMEOUT=15m \
+    GAME_MODE=vanilla
+
+VOLUME ["/data"]
+EXPOSE 8088/tcp 27666/udp
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD wget -q -O - http://127.0.0.1:8088/health >/dev/null

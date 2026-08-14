@@ -18,6 +18,11 @@ Ship Doom 3 Single Player, Resurrection of Evil Single Player, and Doom 3 Multip
 - Release native client and `DEDICATED=ON` configurations build successfully. The initial `D3WASM_CLIENT` configuration hardlinks base game code and emits `build/web/dhewm3.js` plus `build/web/dhewm3.wasm` with Emscripten 6.0.6.
 - Browser engine initialization, WebGL renderer compatibility, the non-blocking main loop, asset mounting, Doom 3 SP, RoE SP, and Doom 3 MP are not yet proven.
 
+### Docker checkpoint (2026-08-14)
+
+- `scripts/build-docker.sh` builds `theodorecharles/doom3-wasm:dev` for `linux/amd64` from the real WASM diagnostic artifact and native client/dedicated baselines.
+- The image serves the diagnostic page and `/health` on port 8088, mounts owner data at `/data`, and contains zero retail PK4 files. It does not claim Doom 3/RoE browser playability.
+
 ## Downstream-only rule
 
 Do not submit anything upstream. Do not open or comment on dhewm3 or id Software pull requests, issues, discussions, or releases. Do not message maintainers. Never push to `upstream`.
