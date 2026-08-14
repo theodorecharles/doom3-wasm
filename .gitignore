@@ -14,3 +14,11 @@
 /.vs*
 
 /neo/CMakeSettings.json
+
+# doom3-wasm local/runtime data
+references/
+data/
+runtime/
+artifacts/runtime/
+*.pk4
+*.PK4
