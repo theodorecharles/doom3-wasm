@@ -2,16 +2,18 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-emsdk_root="${D3WASM_EMSDK:-/home/ted/emsdk}"
+emsdk_root="${D3WASM_EMSDK:-${EMSDK_DIR:-}}"
 jobs="${JOBS:-2}"
 
-if [[ ! -f "${emsdk_root}/emsdk_env.sh" ]]; then
-	echo "Emscripten environment not found: ${emsdk_root}/emsdk_env.sh" >&2
+if command -v emcc >/dev/null 2>&1 && command -v emcmake >/dev/null 2>&1; then
+	:
+elif [[ -n "${emsdk_root}" && -f "${emsdk_root}/emsdk_env.sh" ]]; then
+	export EMSDK_QUIET=1
+	source "${emsdk_root}/emsdk_env.sh"
+else
+	echo "Activate Emscripten first, or set D3WASM_EMSDK/EMSDK_DIR to an emsdk checkout." >&2
 	exit 1
 fi
-
-export EMSDK_QUIET=1
-source "${emsdk_root}/emsdk_env.sh"
 
 emcmake cmake -S "${repo_root}/neo" -B "${repo_root}/build/web" -G Ninja \
 	-DCMAKE_BUILD_TYPE=Release \
